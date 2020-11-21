@@ -6,6 +6,7 @@ import com.google.api.client.extensions.jetty.auth.oauth2.LocalServerReceiver;
 import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
 import com.google.api.client.googleapis.auth.oauth2.GoogleClientSecrets;
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
+import com.google.api.client.http.FileContent;
 import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.jackson2.JacksonFactory;
@@ -15,6 +16,7 @@ import com.google.api.services.drive.DriveScopes;
 import com.google.api.services.drive.model.File;
 import com.google.api.services.drive.model.FileList;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 
 import java.io.*;
 import java.security.GeneralSecurityException;
@@ -23,6 +25,10 @@ import java.util.List;
 
 @Service
 public class GoogleDriveService {
+
+    private final Drive service;
+    private final NetHttpTransport HTTP_TRANSPORT;
+
     private static final String APPLICATION_NAME = "Google Drive API Java Quickstart";
     private static final JsonFactory JSON_FACTORY = JacksonFactory.getDefaultInstance();
     private static final String TOKENS_DIRECTORY_PATH = "tokens";
@@ -33,6 +39,14 @@ public class GoogleDriveService {
      */
     private static final List<String> SCOPES = Collections.singletonList(DriveScopes.DRIVE);
     private static final String CREDENTIALS_FILE_PATH = "/credentials.json";
+
+    public GoogleDriveService() throws GeneralSecurityException, IOException {
+        // Build a new authorized API client service.
+        HTTP_TRANSPORT = GoogleNetHttpTransport.newTrustedTransport();
+        service = new Drive.Builder(HTTP_TRANSPORT, JSON_FACTORY, getCredentials(HTTP_TRANSPORT))
+                .setApplicationName(APPLICATION_NAME)
+                .build();
+    }
 
     /**
      * Creates an authorized Credential object.
@@ -59,12 +73,6 @@ public class GoogleDriveService {
     }
 
     public void main(String fileId) throws IOException, GeneralSecurityException {
-        // Build a new authorized API client service.
-        final NetHttpTransport HTTP_TRANSPORT = GoogleNetHttpTransport.newTrustedTransport();
-        Drive service = new Drive.Builder(HTTP_TRANSPORT, JSON_FACTORY, getCredentials(HTTP_TRANSPORT))
-                .setApplicationName(APPLICATION_NAME)
-                .build();
-
         // Print the names and IDs for up to 10 files.
         FileList result = service.files().list()
                 .setPageSize(10)
@@ -96,12 +104,39 @@ public class GoogleDriveService {
         File fileCopy = service.files().copy(file.getId(), new File().setName("copy")).execute();
         System.out.println("File ID: " + fileCopy.getId());
 
+        // ***************************************************
+        final String uri = "http://localhost:8080/" + fileCopy.getId();
+
+        RestTemplate restTemplate = new RestTemplate();
+        String theResult = restTemplate.getForObject(uri, String.class);
+
+        System.out.println(result);
+        // ***************************************************
+
         // download and export document to pdf
         OutputStream outputStream = new FileOutputStream("src/main/resources/" + file.getName());
         service.files().export(fileCopy.getId(), "application/pdf")
                 .executeMediaAndDownloadTo(outputStream);
-        outputStream.flush();
         outputStream.close();
 
+        // upload pdf file to google drive
+        File fileMetadata = new File();
+        fileMetadata.setName(file.getName());
+        java.io.File filePath = new java.io.File("src/main/resources/" + file.getName());
+        FileContent mediaContent = new FileContent("application/pdf", filePath);
+        File fileToUpload = service.files().create(fileMetadata, mediaContent)
+                .setFields("id")
+                .execute();
+        System.out.println("File ID: " + fileToUpload.getId());
+
+        // remove the copied file
+        service.files().delete(fileCopy.getId()).execute();
+
+        // delete pdf file from resources folder
+        if (filePath.delete()) {
+            System.out.println("Deleted the file: " + filePath.getName());
+        } else {
+            System.out.println("Failed to delete the file.");
+        }
     }
 }
