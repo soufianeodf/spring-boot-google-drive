@@ -16,10 +16,7 @@ import com.google.api.services.drive.model.File;
 import com.google.api.services.drive.model.FileList;
 import org.springframework.stereotype.Service;
 
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.security.GeneralSecurityException;
 import java.util.Collections;
 import java.util.List;
@@ -34,7 +31,7 @@ public class GoogleDriveService {
      * Global instance of the scopes required by this quickstart.
      * If modifying these scopes, delete your previously saved tokens/ folder.
      */
-    private static final List<String> SCOPES = Collections.singletonList(DriveScopes.DRIVE_METADATA_READONLY);
+    private static final List<String> SCOPES = Collections.singletonList(DriveScopes.DRIVE);
     private static final String CREDENTIALS_FILE_PATH = "/credentials.json";
 
     /**
@@ -61,7 +58,7 @@ public class GoogleDriveService {
         return new AuthorizationCodeInstalledApp(flow, receiver).authorize("user");
     }
 
-    public void main(String... args) throws IOException, GeneralSecurityException {
+    public void main(String fileId) throws IOException, GeneralSecurityException {
         // Build a new authorized API client service.
         final NetHttpTransport HTTP_TRANSPORT = GoogleNetHttpTransport.newTrustedTransport();
         Drive service = new Drive.Builder(HTTP_TRANSPORT, JSON_FACTORY, getCredentials(HTTP_TRANSPORT))
@@ -78,9 +75,33 @@ public class GoogleDriveService {
             System.out.println("No files found.");
         } else {
             System.out.println("Files:");
+            int i =1;
             for (File file : files) {
-                System.out.printf("%s (%s)\n", file.getName(), file.getId());
+                System.out.printf("%s %s (%s)\n", i++, file.getName(), file.getId());
             }
         }
+
+        // create a file
+//        File fileMetadata = new File();
+//        fileMetadata.setName("new document");
+//        fileMetadata.setMimeType("application/vnd.google-apps.document");
+//
+//        File file = service.files().create(fileMetadata).execute();
+//        System.out.println("File ID: " + file.getId());
+
+        // get file
+        File file = service.files().get(fileId).execute();
+
+        // copy the file
+        File fileCopy = service.files().copy(file.getId(), new File().setName("copy")).execute();
+        System.out.println("File ID: " + fileCopy.getId());
+
+        // download and export document to pdf
+        OutputStream outputStream = new FileOutputStream("src/main/resources/" + file.getName());
+        service.files().export(fileCopy.getId(), "application/pdf")
+                .executeMediaAndDownloadTo(outputStream);
+        outputStream.flush();
+        outputStream.close();
+
     }
 }
