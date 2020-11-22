@@ -105,7 +105,7 @@ public class GoogleDriveService {
         System.out.println("File ID: " + fileCopy.getId());
 
         // ***************************************************
-        final String uri = "http://localhost:8080/" + fileCopy.getId();
+        final String uri = "https://spring-boot-google-docs.herokuapp.com/" + fileCopy.getId();
 
         RestTemplate restTemplate = new RestTemplate();
         String theResult = restTemplate.getForObject(uri, String.class);
