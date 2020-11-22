@@ -72,65 +72,75 @@ public class GoogleDriveService {
         return new AuthorizationCodeInstalledApp(flow, receiver).authorize("user");
     }
 
-    public void main(String fileId) throws IOException, GeneralSecurityException {
-        // Print the names and IDs for up to 10 files.
-        FileList result = service.files().list()
-                .setPageSize(10)
-                .setFields("nextPageToken, files(id, name)")
-                .execute();
-        List<File> files = result.getFiles();
-        if (files == null || files.isEmpty()) {
-            System.out.println("No files found.");
-        } else {
-            System.out.println("Files:");
-            int i =1;
-            for (File file : files) {
-                System.out.printf("%s %s (%s)\n", i++, file.getName(), file.getId());
-            }
+    public void main(String fileId) {
+        // get file
+        File file = null;
+        try {
+            file = service.files().get(fileId).execute();
+        } catch (IOException e) {
+            e.printStackTrace();
         }
 
-        // create a file
-//        File fileMetadata = new File();
-//        fileMetadata.setName("new document");
-//        fileMetadata.setMimeType("application/vnd.google-apps.document");
-//
-//        File file = service.files().create(fileMetadata).execute();
-//        System.out.println("File ID: " + file.getId());
-
-        // get file
-        File file = service.files().get(fileId).execute();
-
         // copy the file
-        File fileCopy = service.files().copy(file.getId(), new File().setName("copy")).execute();
-        System.out.println("File ID: " + fileCopy.getId());
+        File fileCopy = null;
+        try {
+            File copiedFile = new File();
+            copiedFile.setName("copy");
+            fileCopy = service.files().copy(file.getId(), copiedFile).execute();
+            System.out.println("File ID: " + fileCopy.getId());
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
 
         // ***************************************************
         final String uri = "https://spring-boot-google-docs.herokuapp.com/" + fileCopy.getId();
 
         RestTemplate restTemplate = new RestTemplate();
         String theResult = restTemplate.getForObject(uri, String.class);
-
-        System.out.println(result);
         // ***************************************************
 
         // download and export document to pdf
-        OutputStream outputStream = new FileOutputStream("src/main/resources/" + file.getName());
-        service.files().export(fileCopy.getId(), "application/pdf")
-                .executeMediaAndDownloadTo(outputStream);
-        outputStream.close();
+        OutputStream outputStream = null;
+        try {
+            outputStream = new FileOutputStream("src/main/resources/" + file.getName());
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        }
+
+        try {
+            service.files().export(fileCopy.getId(), "application/pdf")
+                    .executeMediaAndDownloadTo(outputStream);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        try {
+            outputStream.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
 
         // upload pdf file to google drive
         File fileMetadata = new File();
         fileMetadata.setName(file.getName());
         java.io.File filePath = new java.io.File("src/main/resources/" + file.getName());
         FileContent mediaContent = new FileContent("application/pdf", filePath);
-        File fileToUpload = service.files().create(fileMetadata, mediaContent)
-                .setFields("id")
-                .execute();
-        System.out.println("File ID: " + fileToUpload.getId());
+        File fileToUpload = null;
+        try {
+            fileToUpload = service.files().create(fileMetadata, mediaContent)
+                    .setFields("id")
+                    .execute();
+            System.out.println("File ID: " + fileToUpload.getId());
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
 
         // remove the copied file
-        service.files().delete(fileCopy.getId()).execute();
+        try {
+            service.files().delete(fileCopy.getId()).execute();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
 
         // delete pdf file from resources folder
         if (filePath.delete()) {
